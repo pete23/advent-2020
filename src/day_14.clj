@@ -1,6 +1,8 @@
 (ns day-14
   (:require [clojure.string :refer [split split-lines replace]])
-  (:use clojure.test))
+  (:use clojure.test)
+  (:import [com.carrotsearch.hppc LongLongHashMap]
+           [com.carrotsearch.hppc.procedures LongLongProcedure]))
 
 (def test-input ["mask = XXXXXXXXXXXXXXXXXXXXXXXXXXXXX1XXXX0X"
                  "mem[8] = 11"
@@ -54,7 +56,7 @@
   (let [i (parse-instruction "mask = 111")]
     (is (= 7 ((:mask-fn (i {})) 0)))))
 
-(defn lines->computer [mask-fn lines]
+(defn lines->computer [lines mask-fn]
   {:memory {}
    :instructions (mapv parse-instruction lines)
    :mask-fn mask-fn})
@@ -67,59 +69,82 @@
 
 (defn part-1
   ([] (part-1 input))
-  ([input] (->> input
-                (lines->computer set-mask)
-                run-program
-                create-output)))
+  ([input] (-> input
+               (lines->computer set-mask)
+               run-program
+               create-output)))
 
 (deftest part-1-test
   (is (= 165 (part-1 test-input))))
 
-(defn bits-set
-  ([l] (bits-set l [] 0))
-  ([l s c] (let [s (if (= 1 (bit-and 1 l)) (conj s c) s)
-                 l (bit-shift-right l 1)]
-             (if (= l 0) s
-                 (recur l s (inc c))))))
+(defn bits-set ^bytes [^long x]
+  "Return which bits are set in a given long"
+  (let [len (Long/bitCount x)]
+   (loop [l x s (byte-array len) i (int 0) b (byte 0)]
+     (if (= i len) s
+         (let [is-set (when (= 1 (bit-and 1 l)) (aset s i b))]
+           (recur (bit-shift-right l 1) s (if is-set (inc i) i) (byte (inc b))))))))
 
-(defn set-bits
-  ([indexes-of-bits bits] (set-bits indexes-of-bits bits 0))
-  ([indexes-of-bits bits acc]
-   (if (empty? bits) acc
-       (set-bits indexes-of-bits (rest bits) (bit-set acc (indexes-of-bits (first bits)))))))
-   
+(defn set-bits ^long [^bytes indexes-of-bits ^bytes bits]
+  "Return a long based on setting bits based on an index of bits"
+  (areduce bits i ret (long 0)
+           (long (bit-or ret (bit-shift-left 1 (aget ^bytes indexes-of-bits (aget ^bytes bits i)))))))
+
 (defn bit-permutations
-  ([l] (let [our-bits (bits-set l)
-             how-many-bits (count our-bits)]
-         (map #(set-bits our-bits (bits-set %)) (range (Math/pow 2 how-many-bits))))))
+  "Return an array of longs which are all the possible permutations of the bits in the input long."
+  ([l] 
+   (let [^bytes our-bits (bits-set l)
+         how-many-bits (alength our-bits)
+         n-permutations (Math/pow 2 how-many-bits)
+         ^longs permutations (long-array n-permutations)]
+     (areduce ^longs permutations i ret (long 0) (long (aset ^longs permutations i (set-bits our-bits (bits-set i)))))
+     permutations)))
 
 (deftest bit-permutations-test
-  (is (= [0] (bit-permutations 0))
-      (= [0 2 8 10] (bit-permutations 10))))
-             
-(defn set-quantum-mask [computer mask-str]
-  (let [or-mask (parse-mask mask-str 1)
+  (is (= [0] (into [] (bit-permutations 0)))
+      (= [0 2 8 10] (into [] (bit-permutations 10)))))
+
+;; I jokingly call this set-quantum-mask as the bits are in an indeterminate state
+;; That's not what quantum means! Please read Quantum Computing Since Democritus by
+;; Scott Aaronson before engaging in any discussions.
+(defn set-quantum-mask [assigner computer mask-str]
+  (let [set-mask (parse-mask mask-str 1)
         open-bits (btol (replace mask-str #"[1X]" {"1" "0" "X" "1"}))
         open-permutations (bit-permutations open-bits)
         open-mask (bit-not open-bits)]
     (assoc computer
            :assignment-fn
            (fn [computer address value]
-             (let [addresses (map #(-> address
-                                       (bit-or or-mask)    ; 1 set to 1
-                                       (bit-and open-mask) ; open bits set to 0
-                                       (bit-or %))         ; set bits as permuted
-                                  open-permutations)
-                   assignments (zipmap addresses (repeat value))]
-             (update-in computer [:memory] merge assignments))))))
+             (let [masked-address (-> address (bit-or set-mask) (bit-and open-mask))
+                   addresses (amap ^longs open-permutations idx ret (bit-or masked-address (aget ^longs open-permutations idx)))]
+               (update computer :memory assigner addresses value))))))
 
+(defn turbo-assign [^LongLongHashMap memory ^longs addresses ^long value]
+  (areduce addresses i ret (int 0) (.put memory (aget addresses i) value))
+  memory)
+
+;; Interop to create a LongLongProcedure to sum the memory arena
+(defprotocol ValueRetriever
+  (get-value [this ^LongLongHashMap memory]))
+
+(deftype ValueAdder [^{:unsynchronized-mutable true} ^long total]
+  LongLongProcedure
+  (^void apply [this ^long k ^long v] (set! total (+ total v)))
+  ValueRetriever
+  (get-value [this memory] (set! total 0) (.forEach memory this) total))
+
+(defn computer->value [computer]
+  (let [v (ValueAdder. 0)]
+    (.get-value v (:memory computer))))
+    
 (defn part-2
   ([] (part-2 input))
-  ([input] (->> input
-                (lines->computer set-quantum-mask)
-                run-program
-                create-output)))
-
+  ([input] (-> input
+               (lines->computer (partial set-quantum-mask turbo-assign))
+               (assoc :memory (LongLongHashMap. 250000))
+               run-program
+               computer->value)))
+  
 ;; i note different test input is given for part 2:-)
 ;; it would be possible to deal with the test input for part 1 but you'd need
 ;; a different machine that didn't realize the whole memory space but instead dealt
@@ -133,4 +158,3 @@
 ;; i'm going to leave the above as an EEIR:-)
 (deftest part-2-test
   (is (= 208 (part-2 part-2-test-input))))
-                       
