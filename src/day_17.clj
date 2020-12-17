@@ -27,10 +27,12 @@
         w (- (quot k'' 1000) 500)]
     [x y z w]))
 
+(def dimensional-perms [[-1 0 1] [-1000 0 1000] [-1000000 0 1000000] [-1000000000 0 1000000000]])
+
 (defn neighbours [^long dimensions ^long k]
-  (let [[x y z w] (key->coord k)]
-    (for [x' (range -1 2) y' (range -1 2) z' (range -1 2) w' (if (= dimensions 4) (range -1 2) [0])]
-      (coord->key [(+ x x') (+ y y') (+ z z') (+ w w')]))))
+  (loop [n (vector k) ts (take dimensions dimensional-perms)]
+    (if (empty? ts) n
+        (recur (mapcat (fn [t] (map #(+ % t) n)) (first ts)) (rest ts)))))
 
 (defn input->coordinate-values [input]
   (apply concat
@@ -91,8 +93,7 @@
     matrix))
 
 (defn create-output [^LongByteHashMap matrix]
-  (let [adder (ValueAdder. 0)]
-    (.get-value adder matrix)))
+  (.size matrix))
 
 (defn evaluate [dimensions input cycles]
   (->> input
