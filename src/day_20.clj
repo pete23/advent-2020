@@ -31,10 +31,17 @@
                     (clojure.string/split #"\n\n")))
 
 (defn one? [coll] (= 1 (count coll)))
-
+(defn edges->tiles [tiles]
+  (reduce (fn [acc tile]
+            (reduce #(update %1 %2 conj (:tile-number tile)) acc (:edges tile))) {} tiles))
 (defn part-1 [input]
   ;; edges to tile number
-  (let [tiles (mapv parse-tile input)]
-    (reduce (fn [acc tile]
-              (reduce #(update %1 %2 conj (:tile-number tile)) acc (:edges tile))) {} tiles)))
-              
+  (let [tiles (mapv parse-tile input)
+        edges->tiles (edges->tiles tiles)]
+    (reduce * (map first 
+                   (map first
+                        (filter #(= 4 (second %))
+                                (frequencies (filter one? (map second edges->tiles)))))))))
+(deftest day-20-test
+  (is (= 20899048083289 (part-1 test-input)))
+  (is (= 2699020245973 (part-1 input))))
