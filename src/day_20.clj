@@ -10,7 +10,7 @@
                       (last tile)
                       (map first tile)
                       (map last tile))]
-    (into edges (reverse edges))))
+    (into edges (map reverse edges))))
   
 (defn parse-tile [lines]
   (let [[header & tile-lines] (split-lines lines)
@@ -30,11 +30,11 @@
                     slurp
                     (clojure.string/split #"\n\n")))
 
+(defn one? [coll] (= 1 (count coll)))
 
 (defn part-1 [input]
   ;; edges to tile number
   (let [tiles (mapv parse-tile input)]
-    (reduce (fn [edge->tile-number ]
-    (mapcat (fn [tile]
-              (map (fn [edge] [edge (:tile-number tile)]) (:edges tile))) tiles)))
-                      
+    (reduce (fn [acc tile]
+              (reduce #(update %1 %2 conj (:tile-number tile)) acc (:edges tile))) {} tiles)))
+              

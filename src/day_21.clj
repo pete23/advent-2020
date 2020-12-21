@@ -73,7 +73,6 @@ in map? update allergen intersection foods
 
 (defn part-2 [input]
   (let [foods-and-allergens (map parse-line input)
-        all-foods (mapcat :foods foods-and-allergens)
         known-allergens (reduce map-allergens {} foods-and-allergens)
         foods (map second (second (fix-point resolver [known-allergens (sorted-map)])))]
     (apply str (interpose "," foods))))
@@ -84,4 +83,3 @@ in map? update allergen intersection foods
   (is (= 2317 (part-1 input)))
   (is (= "mxmxvkd,sqjhc,fvjkl" (part-2 test-input)))
   (is (= "kbdgs,sqvv,slkfgq,vgnj,brdd,tpd,csfmb,lrnz" (part-2 input))))
-      
