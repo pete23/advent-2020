@@ -64,11 +64,14 @@
         check (split-lines check-input)]
     [rules check]))
 
-(def input (-> "day-19.input"
-               clojure.java.io/resource
-               slurp
-               (split #"\n\n")
-               parse-input))
+(defn read-input [file]
+  (-> file
+      clojure.java.io/resource
+      slurp
+      (split #"\n\n")
+      parse-input))
+  
+(def input (read-input "day-19.input"))
 
 (def test-rules-1 (->> ["0: 1 2" "1: \"a\"" "2: 1 3 | 3 1" "3: \"b\""]
                        lines->rules))
@@ -93,12 +96,12 @@
 ;; no common strings produced between them
 
 (defn count-occurrences
-  ([s rules]
-   (loop [chunks (map #(apply str %) (partition 8 s))
+  ([s n rules]
+   (loop [chunks (map #(apply str %) (partition n s))
           acc []
           current 0
           rules rules]
-     (if (or (empty? chunks) (empty? rules)) acc
+     (if (or (empty? chunks) (empty? rules)) (conj acc current)
          (let [rule-matches ((first rules) (first chunks))]
            (recur (if rule-matches (rest chunks) chunks)
                   (if rule-matches acc (conj acc current))
@@ -108,10 +111,14 @@
 (defn new-rule-zero [rules]
   (let [zero-rules [(rules 42) (rules 31)]]
     (fn [s]
-      (let [occurrences (count-occurrences s zero-rules)]
+      (let [occurrences (count-occurrences s (count (ffirst zero-rules)) zero-rules)]
         (when (= (count occurrences) 2)
-          (println occurrences)
           (> (first occurrences) (last occurrences) 0))))))
 
 (defn part-2 [[rules check]]
   (count (filter (new-rule-zero (compile-rules rules)) check)))
+
+(def part-2-test-input (read-input "day-19-2.test-input"))
+  
+;; let us never speak of this again
+;; shoulda just built the regexps lol:-)
