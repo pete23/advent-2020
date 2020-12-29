@@ -22,26 +22,47 @@
 (defn parse-instruction [s]
   (let [[opcode operand] (split s #" " 2)
         operand (atol operand)]
-    (partial (operators opcode) operand)))
-
+    [opcode operand]))
 
 (def input (->> "resources/day-8.input"
                 slurp
-                clojure.string/split-lines
-                (mapv parse-instruction)))
+                clojure.string/split-lines))
 
 (defn cycle [machine]
-  (let [instruction (nth (:instructions machine) (:pc machine))]
-    (instruction machine)))
+  (let [[opcode operand] (nth (:instructions machine) (:pc machine))
+        instruction (operators opcode)]
+    (instruction operand machine)))
 
 (defn part-1 [input]
-  (loop [visited #{} machine (OpMachine. input 0 0)]
+  (loop [visited #{} machine (OpMachine. (mapv parse-instruction input) 0 0)]
     (if (visited (:pc machine))
-      (:pc machine)
+      (:acc machine)
       (recur (conj visited (:pc machine)) (cycle machine)))))
 
 (def test-input ["nop +0" "acc +1" "jmp +4" "acc +3" "jmp -3"
                  "acc -99" "acc +1" "jmp -4" "acc +6"])
 
 (deftest part-1-test
-  (is (= 5 (part-1 (mapv parse-instructions test-input)))))
+  (is (= 5 (part-1 test-input))))
+
+(defn part-2-run [input]
+  (loop [visited #{} machine (OpMachine. input 0 0)]
+    (cond (visited (:pc machine)) false
+          (= (count (:instructions machine)) (:pc machine)) (:acc machine)
+          :else (recur (conj visited (:pc machine)) (cycle machine)))))
+
+(def part-2-mutations
+  {"jmp" "nop" "nop" "jmp" "acc" "acc"})
+
+(defn mutate [mutations input]
+  (let [mutator (fn [[opcode operand]]
+                  (vector (mutations opcode) operand))]
+    (remove #(= input %)
+            (map-indexed (fn [index _] (update input index mutator)) input))))
+  
+(defn part-2 [input]
+  (let [mutations (mutate part-2-mutations (mapv parse-instruction input))]
+    (some part-2-run mutations)))
+
+(deftest part-2-test
+  (is (= 8 (part-2 test-input))))
