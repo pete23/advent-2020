@@ -28,11 +28,26 @@
   (is (= 295 (part-1 test-input))))
 
 (defn parse-input-2 [input]
-  (remove #(nil? (second %))
-          (map-indexed #(vector %1 (when (not= "x" %2) (Long/parseLong %2))) (split-csv (:buses input)))))
+  (->> input
+       :buses
+       split-csv
+       (map-indexed (fn [index value]
+                         (when (not= "x" value)
+                           (let [m (Long/parseLong value)
+                                 n (mod (- m index) m)]
+                             ;; convert from number of minutes after to the
+                             ;; value at the start - i.e. modulus - minutes
+                             (vector n m)))))
+       (remove nil?)))
 
-(defn brute-part-2 [input]
-  (let [tests (reverse (sort-by second (parse-input-2 input)))
-        n (second (first input))]
-    (loop [i (+ n (first (first input)))]
-      (if (every?))))) 
+(defn sieve [[n m] [n' m']]
+  (loop [n n]
+    (if (= n' (mod n m')) [n (* m m')]
+        (recur (+ n m)))))
+
+;; chinese remainder sieve as per wikipedia
+;; could sort by size descending to be a bit quicker
+;; but it's sub millisecond as is so...
+(defn part-2 [input]
+  (let [remainders (parse-input-2 input)]
+    (first (reduce sieve remainders))))
