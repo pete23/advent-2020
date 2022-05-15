@@ -1,5 +1,7 @@
 (ns day-14
-  (:require [clojure.string :refer [split split-lines replace]])
+  (:require [clojure.string :refer [split split-lines replace]]
+            [clj-java-decompiler.core :refer [decompile]]
+            [criterium.core :refer [bench quick-bench]])
   (:use clojure.test)
   (:import [com.carrotsearch.hppc LongLongHashMap]
            [com.carrotsearch.hppc.procedures LongLongProcedure]))
@@ -88,7 +90,7 @@
 (defn set-bits ^long [^bytes indexes-of-bits ^bytes bits]
   "Return a long based on setting bits based on an index of bits"
   (areduce bits i ret (long 0)
-           (long (bit-or ret (bit-shift-left 1 (aget ^bytes indexes-of-bits (aget ^bytes bits i)))))))
+           (bit-or ret (bit-shift-left 1 (aget ^bytes indexes-of-bits (aget ^bytes bits i))))))
 
 (defn bit-permutations
   "Return an array of longs which are all the possible permutations of the bits in the input long."
@@ -97,7 +99,9 @@
          how-many-bits (alength our-bits)
          n-permutations (Math/pow 2 how-many-bits)
          ^longs permutations (long-array n-permutations)]
-     (areduce ^longs permutations i ret (long 0) (long (aset ^longs permutations i (set-bits our-bits (bits-set i)))))
+     (areduce ^longs permutations i ret (long 0)
+              (long
+               (aset ^longs permutations i (set-bits our-bits (bits-set i)))))
      permutations)))
 
 (deftest bit-permutations-test
@@ -120,7 +124,7 @@
                (update computer :memory assigner addresses value))))))
 
 (defn turbo-assign [^LongLongHashMap memory ^longs addresses ^long value]
-  (areduce addresses i ret (int 0) (.put memory (aget addresses i) value))
+  (areduce ^longs addresses i ret 0 (.put memory (aget addresses i) value))
   memory)
 
 ;; Interop to create a LongLongProcedure to sum the memory arena
@@ -129,7 +133,9 @@
 
 (deftype ValueAdder [^{:unsynchronized-mutable true} ^long total]
   LongLongProcedure
-  (^void apply [this ^long k ^long v] (set! total (+ total v)))
+  (^void apply [this ^long k ^long v]
+   ;; this gets boxed unnecessarily - thread at https://groups.google.com/g/clojure/c/sqFxKoTt1tQ
+   (set! total (unchecked-add total v)))
   ValueRetriever
   (get-value [this memory] (set! total 0) (.forEach memory this) total))
 
