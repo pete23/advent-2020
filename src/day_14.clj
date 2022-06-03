@@ -4,7 +4,10 @@
             [criterium.core :refer [bench quick-bench]])
   (:use clojure.test)
   (:import [com.carrotsearch.hppc LongLongHashMap]
-           [com.carrotsearch.hppc.procedures LongLongProcedure]))
+           [com.carrotsearch.hppc.procedures LongLongProcedure]
+           [advent VoidHelper]))
+
+(set! *unchecked-math* true)
 
 (def test-input ["mask = XXXXXXXXXXXXXXXXXXXXXXXXXXXXX1XXXX0X"
                  "mem[8] = 11"
@@ -82,10 +85,12 @@
 (defn bits-set ^bytes [^long x]
   "Return which bits are set in a given long"
   (let [len (Long/bitCount x)]
-   (loop [l x s (byte-array len) i (int 0) b (byte 0)]
+   (loop [l x s (byte-array len) i 0 b 0]
      (if (= i len) s
-         (let [is-set (when (= 1 (bit-and 1 l)) (aset s i b))]
-           (recur (bit-shift-right l 1) s (if is-set (inc i) i) (byte (inc b))))))))
+         (if (= 1 (bit-and 1 l))
+           (do (aset s i (byte b))
+               (recur (bit-shift-right l 1) s (inc i) (inc b)))
+           (recur (bit-shift-right l 1) s i (inc b)))))))
 
 (defn set-bits ^long [^bytes indexes-of-bits ^bytes bits]
   "Return a long based on setting bits based on an index of bits"
@@ -124,6 +129,7 @@
                (update computer :memory assigner addresses value))))))
 
 (defn turbo-assign [^LongLongHashMap memory ^longs addresses ^long value]
+  ;(Fast/turboAssign memory addresses value)
   (areduce ^longs addresses i ret 0 (.put memory (aget addresses i) value))
   memory)
 
@@ -135,7 +141,8 @@
   LongLongProcedure
   (^void apply [this ^long k ^long v]
    ;; this gets boxed unnecessarily - thread at https://groups.google.com/g/clojure/c/sqFxKoTt1tQ
-   (set! total (unchecked-add total v)))
+   (set! total (unchecked-add total v))
+   nil)
   ValueRetriever
   (get-value [this memory] (set! total 0) (.forEach memory this) total))
 
